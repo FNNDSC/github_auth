@@ -3,6 +3,11 @@
 
 `github_auth` is a stand alone service that simplfies the ability of a user to collect an access token for github. This access token is suitable for usage in other clients to access github on their behalf.
 
+== Before you start...
+
+Consult link:HOWTOINIT.adoc[HOWTOINIT], and in particular read the sections how to collect client and secret tokens. These need to be added to `.env` and their purpose allows this application to speak to github on behalf of another user.
+
+
 == How to start this service
 
 Currently, `github_auth` is a prototypical development project. To start, open two terminals. In one terminal start the UI
