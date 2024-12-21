@@ -1,0 +1,34 @@
+= github_auth
+
+
+`github_auth` is a stand alone service that simplfies the ability of a user to collect an access token for github. This access token is suitable for usage in other clients to access github on their behalf.
+
+== How to start this service
+
+Currently, `github_auth` is a prototypical development project. To start, open two terminals. In one terminal start the UI
+
+----
+npm run dev
+----
+
+and in another terminal
+
+----
+npm run server
+----
+
+== How to access
+
+Simply point a browser to `http://localhost:3000`.
+
+Follow the very simple prompt and authenticate to github. On successful authentication, a token will be presented in the browser display. This token can be passed to other applications which can operate on github repositories on the user's behalf.
+
+
+== Projected use case and future development
+
+Future short term development will use a MongoDB service to store these tokens for a user, and further automate the ability of other services to collect these tokens.
+
+== Security implications
+
+These probably need to be carefully considered. Storing the token in a mongoDB transfers the security question/context to the mongoDB access. How would/should a client access/authenticate to this mongoDB to collect a token?
+

@@ -1,0 +1,317 @@
+# GitHub OAuth Token Generator Setup Guide
+
+## Overview
+This guide describes how to create a React application that allows users to generate GitHub OAuth tokens. The application provides a simple interface for users to authenticate with GitHub and obtain a token.
+
+## Prerequisites
+- Node Version Manager (nvm)
+- Node.js 18 or later
+- A GitHub account
+
+## Environment Setup
+
+1. Set up Node.js using nvm:
+```bash
+nvm install 18
+nvm use 18
+```
+
+2. Create and set up project:
+```bash
+mkdir github-auth
+cd github-auth
+npm init -y
+```
+
+3. Install dependencies:
+```bash
+npm install react@18.2.0 react-dom@18.2.0 typescript @types/react@18.2.0 @types/react-dom@18.2.0 axios cors express dotenv
+npm install --save-dev @typescript-eslint/parser @typescript-eslint/eslint-plugin @vitejs/plugin-react vite tsx
+```
+
+## Project Configuration
+
+1. Create `vite.config.ts`:
+```typescript
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+
+export default defineConfig({
+  plugins: [react()],
+  server: {
+    port: 3000
+  }
+})
+```
+
+2. Create `tsconfig.json`:
+```json
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "useDefineForClassFields": true,
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true
+  },
+  "include": ["src"],
+  "references": [{ "path": "./tsconfig.node.json" }]
+}
+```
+
+3. Create `tsconfig.node.json`:
+```json
+{
+  "compilerOptions": {
+    "composite": true,
+    "skipLibCheck": true,
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "allowSyntheticDefaultImports": true
+  },
+  "include": ["vite.config.ts"]
+}
+```
+
+4. Create `src/vite-env.d.ts`:
+```typescript
+/// <reference types="vite/client" />
+
+interface ImportMetaEnv {
+  readonly VITE_GITHUB_CLIENT_ID: string
+}
+
+interface ImportMeta {
+  readonly env: ImportMetaEnv
+}
+```
+
+## Application Code
+
+1. Create the server file `server.ts` in the root directory:
+```typescript
+import express from 'express';
+import cors from 'cors';
+import axios from 'axios';
+import * as dotenv from 'dotenv';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+import path from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+dotenv.config();
+
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+const clientId = process.env.GITHUB_CLIENT_ID;
+const clientSecret = process.env.GITHUB_CLIENT_SECRET;
+
+if (!clientId || !clientSecret) {
+    console.error('Missing required environment variables');
+    process.exit(1);
+}
+
+app.post('/api/github/token', async (req, res) => {
+    const { code } = req.body;
+    
+    if (!code) {
+        return res.status(400).json({ error: 'Code is required' });
+    }
+
+    try {
+        const response = await axios.post('https://github.com/login/oauth/access_token', {
+            client_id: clientId,
+            client_secret: clientSecret,
+            code
+        }, {
+            headers: { Accept: 'application/json' }
+        });
+        
+        res.json(response.data);
+    } catch (error) {
+        console.error('Token exchange error:', error);
+        res.status(500).json({ error: 'Failed to exchange code for token' });
+    }
+});
+
+const PORT = process.env.PORT || 3001;
+
+app.listen(PORT, () => {
+    console.log(`Server running on http://localhost:${PORT}`);
+});
+```
+
+2. Create React components:
+
+`src/main.tsx`:
+```typescript
+import React from 'react'
+import ReactDOM from 'react-dom/client'
+import App from './App'
+
+ReactDOM.createRoot(document.getElementById('root')!).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+)
+```
+
+`src/App.tsx`:
+```typescript
+import React, { useEffect, useState } from 'react';
+
+interface AuthResponse {
+  access_token?: string;
+  error?: string;
+}
+
+function App() {
+  const [token, setToken] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const clientId = import.meta.env.VITE_GITHUB_CLIENT_ID;
+
+  useEffect(() => {
+    const code = new URLSearchParams(window.location.search).get('code');
+    if (code) {
+      exchangeCodeForToken(code);
+    }
+  }, []);
+
+  const exchangeCodeForToken = async (code: string) => {
+    try {
+      const response = await fetch('http://localhost:3001/api/github/token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ code })
+      });
+
+      const data: AuthResponse = await response.json();
+      
+      if (data.access_token) {
+        setToken(data.access_token);
+        window.history.replaceState({}, document.title, window.location.pathname);
+      } else {
+        setError(data.error || 'Failed to get access token');
+      }
+    } catch (err) {
+      setError('Failed to exchange code for token');
+      console.error('Token exchange error:', err);
+    }
+  };
+
+  const handleLogin = () => {
+    window.location.href = `https://github.com/login/oauth/authorize?client_id=${clientId}&scope=repo`;
+  };
+
+  return (
+    <div className="container">
+      <h1>GitHub Token Generator</h1>
+      
+      {error && (
+        <div style={{ color: 'red', margin: '10px 0' }}>
+          Error: {error}
+        </div>
+      )}
+
+      {!token ? (
+        <button onClick={handleLogin}>
+          Login with GitHub
+        </button>
+      ) : (
+        <div>
+          <p>Successfully obtained token:</p>
+          <textarea 
+            readOnly 
+            value={token}
+            style={{
+              width: '100%',
+              maxWidth: '500px',
+              height: '100px',
+              margin: '10px 0'
+            }}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default App;
+```
+
+## Environment Configuration
+
+1. Create `.env` file in the root directory:
+```env
+VITE_GITHUB_CLIENT_ID=your_client_id
+GITHUB_CLIENT_ID=your_client_id
+GITHUB_CLIENT_SECRET=your_client_secret
+```
+
+2. Add `.env` to `.gitignore`:
+```bash
+echo ".env" >> .gitignore
+```
+
+## Running the Application
+
+1. Start the backend server:
+```bash
+npm run server
+```
+
+2. In a separate terminal, start the frontend:
+```bash
+npm run dev
+```
+
+The application will be available at http://localhost:3000
+
+## Project Structure
+```
+github-auth/
+├── .env                    # Environment variables (not in git)
+├── .gitignore             # Git ignore file
+├── package.json           # Project dependencies and scripts
+├── server.ts              # Backend server
+├── tsconfig.json          # TypeScript configuration
+├── tsconfig.node.json     # TypeScript config for Node
+├── vite.config.ts         # Vite configuration
+└── src/
+    ├── App.tsx           # Main React component
+    ├── main.tsx         # React entry point
+    ├── vite-env.d.ts    # Vite environment types
+    └── index.css        # Styles (if needed)
+```
+
+## Using the Application
+1. Click the "Login with GitHub" button
+2. Authorize the application on GitHub
+3. After successful authorization, you'll see your GitHub token displayed
+
+## Security Notes
+- Keep your Client ID and Client Secret secure
+- Never commit the `.env` file to version control
+- The token displayed has the `repo` scope, giving access to private repositories
+- Users should save their token securely as it won't be shown again
+
+## Troubleshooting
+- If you see TypeScript errors about JSX, ensure your `tsconfig.json` is correctly configured
+- If the server fails to start, ensure you're using Node.js 18 or later
+- If the GitHub OAuth flow fails, verify your environment variables are correctly set
